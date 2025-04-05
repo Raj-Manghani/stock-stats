@@ -5,18 +5,14 @@ services:
       dockerfile: Dockerfile
     container_name: data-source-proxy
     ports:
-      - "8001:8001" # Map container port 8001 to host port 8001
+      - "8001:8001"
     environment:
-      # Use .env file for secrets/config is recommended
-      STOCK_API_KEY: ${STOCK_API_KEY:-} # Placeholder, will be loaded from .env
-      STOCK_API_BASE_URL: ${STOCK_API_BASE_URL:-} # Placeholder, will be loaded from .env
-      # Add NEWS_API_KEY, LLM_API_KEY etc. later
-    # volumes: # Temporarily remove volume mount for debugging permissions
-    #   - ./data-source-proxy/app:/app
+      STOCK_API_KEY: ${STOCK_API_KEY:-}
+      STOCK_API_BASE_URL: ${STOCK_API_BASE_URL:-}
     restart: unless-stopped
     depends_on:
       core-database:
-        condition: service_healthy # Wait for DB to be healthy before starting
+        condition: service_healthy
 
   market-data-manager:
     build:
@@ -24,33 +20,29 @@ services:
       dockerfile: Dockerfile
     container_name: market-data-manager
     ports:
-      - "8002:8002" # Map container port 8002 to host port 8002
+      - "8002:8002"
     environment:
-      # Define URLs for dependencies
       DATABASE_URL: postgresql+asyncpg://stockuser:stockpassword@core-database:5432/stock_insights
       DATA_SOURCE_PROXY_URL: http://data-source-proxy:8001
-    # volumes: # Temporarily remove volume mount for debugging permissions
-    #   - ./market-data-manager/app:/app
     restart: unless-stopped
     depends_on:
       core-database:
         condition: service_healthy
-      data-source-proxy: # Wait for proxy to be running (though no healthcheck defined yet)
+      data-source-proxy:
         condition: service_started
 
   core-database:
-    image: postgres:16 # Using a specific version is generally recommended
+    image: postgres:16
     container_name: core-database
     environment:
-      POSTGRES_USER: stockuser      # Replace with a secure user in production
-      POSTGRES_PASSWORD: stockpassword # Replace with a secure password in production
+      POSTGRES_USER: stockuser
+      POSTGRES_PASSWORD: stockpassword
       POSTGRES_DB: stock_insights
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # Add :Z flag for SELinux/Podman compatibility with mounted init script
       - ./core-database/init.sql:/docker-entrypoint-initdb.d/init.sql:Z
     ports:
-      - "5432:5432" # Expose port for potential direct access during development
+      - "5432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U stockuser -d stock_insights"]
@@ -58,5 +50,48 @@ services:
       timeout: 5s
       retries: 5
 
+  text-processor:
+    build:
+      context: ./text-processor
+      dockerfile: Dockerfile
+    container_name: text-processor
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://stockuser:stockpassword@core-database:5432/stock_insights
+      LLM_API_KEY: ${LLM_API_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      core-database:
+        condition: service_healthy
+
+  backend-api:
+    build:
+      context: ./backend-api
+      dockerfile: Dockerfile
+    container_name: backend-api
+    ports:
+      - "8004:8004"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://stockuser:stockpassword@core-database:5432/stock_insights
+    restart: unless-stopped
+    depends_on:
+      core-database:
+        condition: service_healthy
+
+  analysis-engine:
+    build:
+      context: ./analysis-engine
+      dockerfile: Dockerfile
+    container_name: analysis-engine
+    ports:
+      - "8005:8005"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://stockuser:stockpassword@core-database:5432/stock_insights
+    restart: unless-stopped
+    depends_on:
+      core-database:
+        condition: service_healthy
+
 volumes:
-  pgdata: # Define the named volume for persistent data
+  pgdata:

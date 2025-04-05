@@ -1,5 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 interface Stock {
   ticker: string;
@@ -48,6 +61,27 @@ function App() {
       .catch(err => console.error(err));
   }, [selectedTicker]);
 
+  const chartData = {
+    labels: marketData.map(d => d.date),
+    datasets: [
+      {
+        label: 'Close Price',
+        data: marketData.map(d => d.close),
+        borderColor: 'blue',
+        backgroundColor: 'lightblue',
+        fill: false,
+      }
+    ]
+  };
+
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' as const },
+      title: { display: true, text: `Price Chart for ${selectedTicker}` }
+    }
+  };
+
   return (
     <div style={{ padding: '1rem' }}>
       <h1>Stock Insights</h1>
@@ -65,25 +99,9 @@ function App() {
       {selectedTicker && (
         <>
           <h2>Market Data for {selectedTicker}</h2>
-          <table border={1} cellPadding={4}>
-            <thead>
-              <tr>
-                <th>Date</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th>
-              </tr>
-            </thead>
-            <tbody>
-              {marketData.map(d => (
-                <tr key={d.date}>
-                  <td>{d.date}</td>
-                  <td>{d.open}</td>
-                  <td>{d.high}</td>
-                  <td>{d.low}</td>
-                  <td>{d.close}</td>
-                  <td>{d.volume}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ maxWidth: '800px' }}>
+            <Line data={chartData} options={chartOptions} />
+          </div>
 
           <h2>News & LLM Insights</h2>
           {newsInsights.map(n => (
