@@ -1,0 +1,30 @@
+# Environment variables
+.env
+.env.*
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Docker / Podman (Volumes are external, but good practice)
+# pgdata/
+
+# VS Code settings
+.vscode/
+
+# Build artifacts (if any later)
+build/
+dist/
+*.egg-info/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+# Node.js
+node_modules/
+*.log
+
+# Frontend build output
+frontend-ui/dist/

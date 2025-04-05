@@ -1,0 +1,4 @@
+fastapi>=0.110.0 # Use a recent version
+uvicorn[standard]>=0.29.0 # ASGI server with standard extras
+httpx>=0.27.0 # Async HTTP client
+python-dotenv>=1.0.0 # To load .env file for local development (optional but helpful)

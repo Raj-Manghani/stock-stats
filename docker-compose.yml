@@ -1,0 +1,62 @@
+services:
+  data-source-proxy:
+    build:
+      context: ./data-source-proxy
+      dockerfile: Dockerfile
+    container_name: data-source-proxy
+    ports:
+      - "8001:8001" # Map container port 8001 to host port 8001
+    environment:
+      # Use .env file for secrets/config is recommended
+      STOCK_API_KEY: ${STOCK_API_KEY:-} # Placeholder, will be loaded from .env
+      STOCK_API_BASE_URL: ${STOCK_API_BASE_URL:-} # Placeholder, will be loaded from .env
+      # Add NEWS_API_KEY, LLM_API_KEY etc. later
+    # volumes: # Temporarily remove volume mount for debugging permissions
+    #   - ./data-source-proxy/app:/app
+    restart: unless-stopped
+    depends_on:
+      core-database:
+        condition: service_healthy # Wait for DB to be healthy before starting
+
+  market-data-manager:
+    build:
+      context: ./market-data-manager
+      dockerfile: Dockerfile
+    container_name: market-data-manager
+    ports:
+      - "8002:8002" # Map container port 8002 to host port 8002
+    environment:
+      # Define URLs for dependencies
+      DATABASE_URL: postgresql+asyncpg://stockuser:stockpassword@core-database:5432/stock_insights
+      DATA_SOURCE_PROXY_URL: http://data-source-proxy:8001
+    # volumes: # Temporarily remove volume mount for debugging permissions
+    #   - ./market-data-manager/app:/app
+    restart: unless-stopped
+    depends_on:
+      core-database:
+        condition: service_healthy
+      data-source-proxy: # Wait for proxy to be running (though no healthcheck defined yet)
+        condition: service_started
+
+  core-database:
+    image: postgres:16 # Using a specific version is generally recommended
+    container_name: core-database
+    environment:
+      POSTGRES_USER: stockuser      # Replace with a secure user in production
+      POSTGRES_PASSWORD: stockpassword # Replace with a secure password in production
+      POSTGRES_DB: stock_insights
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Add :Z flag for SELinux/Podman compatibility with mounted init script
+      - ./core-database/init.sql:/docker-entrypoint-initdb.d/init.sql:Z
+    ports:
+      - "5432:5432" # Expose port for potential direct access during development
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockuser -d stock_insights"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata: # Define the named volume for persistent data

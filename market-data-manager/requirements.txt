@@ -1,0 +1,9 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+httpx>=0.27.0 # To call data-source-proxy
+sqlalchemy[asyncio]>=2.0 # ORM with asyncio support
+asyncpg>=0.29.0 # Async PostgreSQL driver
+python-dotenv>=1.0.0
+psycopg2-binary>=2.9.9 # Often needed by SQLAlchemy even with asyncpg for some operations or initial setup
+alembic>=1.13.1 # For database migrations (good practice, though maybe not strictly needed for PoC)
+tenacity>=8.2.3 # For retry logic when connecting to DB or calling proxy
