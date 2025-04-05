@@ -99,10 +99,13 @@ async def analyze_new_articles():
             try:
                 from sqlalchemy import text as sa_text
                 stmt = sa_text(
-                    "SELECT ts.id, ts.content FROM text_sources ts "
-                    "WHERE NOT EXISTS ("
-                    "SELECT 1 FROM llm_analysis_results lar WHERE lar.text_source_id = ts.id"
-                    ") LIMIT 5"
+                    """
+                    SELECT ts.id, ts.content FROM text_sources ts
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM llm_analysis_results lar WHERE lar.text_source_id = ts.id
+                    )
+                    LIMIT 5
+                    """
                 )
                 result = await session.execute(stmt)
                 rows = result.fetchall()

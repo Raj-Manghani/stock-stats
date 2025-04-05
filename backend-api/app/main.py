@@ -53,17 +53,41 @@ async def get_market_data(ticker: str):
 @app.get("/stocks/{ticker}/news-insights")
 async def get_news_and_insights(ticker: str):
     async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            text("""
+        # Lookup company name for ticker
+        company_result = await session.execute(
+            text("SELECT company_name FROM stocks WHERE ticker = :ticker"),
+            {"ticker": ticker}
+        )
+        company_row = company_result.fetchone()
+        company_name = company_row[0] if company_row else ""
+
+        pattern_ticker = f"%{ticker}%"
+        patterns = [pattern_ticker]
+
+        if company_name:
+            words = [w.strip() for w in company_name.split() if len(w.strip()) > 2]
+            patterns.extend([f"%{word}%" for word in words])
+
+        # Build dynamic WHERE clause
+        conditions = []
+        params = {}
+        for idx, pat in enumerate(patterns):
+            param_name = f"p{idx}"
+            params[param_name] = pat
+            conditions.append(f"ts.meta_data->>'title' ILIKE :{param_name}")
+            conditions.append(f"ts.meta_data->>'summary' ILIKE :{param_name}")
+
+        where_clause = " OR ".join(conditions)
+
+        query = f"""
             SELECT ts.id, ts.content, ts.published_at, ts.meta_data, lar.analysis_type, lar.result
             FROM text_sources ts
             LEFT JOIN llm_analysis_results lar ON lar.text_source_id = ts.id
-            WHERE ts.meta_data->>'title' ILIKE :pattern
             ORDER BY ts.published_at DESC
             LIMIT 20
-            """),
-            {"pattern": f"%{ticker}%"}
-        )
+        """
+
+        result = await session.execute(text(query), params)
         articles = []
         for r in result.fetchall():
             articles.append({
