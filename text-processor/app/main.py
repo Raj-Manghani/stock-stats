@@ -10,7 +10,18 @@ from sqlalchemy import select, text
 from datetime import datetime
 import httpx
 
-app = FastAPI(title="Text Processor Service")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task1 = asyncio.create_task(fetch_and_store_rss())
+    task2 = asyncio.create_task(analyze_new_articles())
+    yield
+    task1.cancel()
+    task2.cancel()
+    await asyncio.gather(task1, task2, return_exceptions=True)
+
+app = FastAPI(title="Text Processor Service", lifespan=lifespan)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
@@ -112,11 +123,31 @@ async def analyze_new_articles():
                 for row in rows:
                     text_source_id, content = row
                     try:
-                        async with httpx.AsyncClient(timeout=30) as client:
+                        prompt = f"""
+Please analyze the following financial news article and provide:
+1. A concise summary (2-3 sentences).
+2. Sentiment score (-1 to 1) and label (positive, neutral, negative).
+3. List of key events (earnings, M&A, product launches, regulations, etc.).
+4. List of mentioned companies, people, and products.
+5. Main topics or themes.
+
+Article:
+{content}
+"""
+
+                        async with httpx.AsyncClient(timeout=60) as client:
                             response = await client.post(
-                                f"{LLM_API_BASE_URL}/analyze",
+                                f"{LLM_API_BASE_URL}/chat/completions",
                                 headers={"Authorization": f"Bearer {LLM_API_KEY}"},
-                                json={"text": content}
+                                json={
+                                    "model": "mistralai/mixtral-8x7b-instruct",
+                                    "messages": [
+                                        {"role": "system", "content": "You are a financial news analyst."},
+                                        {"role": "user", "content": prompt}
+                                    ],
+                                    "max_tokens": 1000,
+                                    "temperature": 0.7
+                                }
                             )
                             response.raise_for_status()
                             llm_result = response.json()
@@ -136,9 +167,4 @@ async def analyze_new_articles():
                 await session.commit()
             except Exception as e:
                 print(f"Error analyzing articles: {e}")
-        await asyncio.sleep(300)
-
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(fetch_and_store_rss())
-    asyncio.create_task(analyze_new_articles())
+        await asyncio.sleep(10)
